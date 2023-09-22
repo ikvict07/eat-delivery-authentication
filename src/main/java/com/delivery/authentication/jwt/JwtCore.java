@@ -38,4 +38,13 @@ public class JwtCore {
                 .signWith(key, SignatureAlgorithm.HS256)
                 .compact();
     }
+
+    public String generateTokenForApi() {
+        return Jwts.builder()
+                .setExpiration(new Date(new Date().getTime() + lifetime))
+                .setSubject("Allowed")
+                .setIssuedAt(new Date())
+                .signWith(key, SignatureAlgorithm.HS256)
+                .compact();
+    }
 }
