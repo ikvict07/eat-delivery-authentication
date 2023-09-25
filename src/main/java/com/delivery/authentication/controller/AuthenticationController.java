@@ -7,70 +7,57 @@ import com.delivery.authentication.jwt.JwtCore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
 @RestController
 @RequestMapping("/api/authentication")
 public class AuthenticationController {
-    private PasswordEncoder passwordEncoder;
+    private final String dbAPI = "/api/customer-db/";
     private JwtCore jwtCore;
-    private AuthenticationManager authenticationManager;
-
     @Value("${auth.customer.url}")
     private String customer_url;
-    private String dbAPI = "/api/customer-db/";
-
-    @Autowired
-    private void setAuthenticationManager(AuthenticationManager authenticationManager) {
-        this.authenticationManager = authenticationManager;
-    }
-
-    @Autowired
-    private void setPasswordEncoder(PasswordEncoder passwordEncoder) {
-        this.passwordEncoder = passwordEncoder;
-    }
 
     @Autowired
     private void setJwtCore(JwtCore jwtCore) {
         this.jwtCore = jwtCore;
     }
 
-    @GetMapping("/login")
+    @PostMapping("/login")
     private ResponseEntity<?> login(@RequestBody SignInRequest request) {
-
-        Authentication auth;
         try {
-            auth = authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword()));
+            ResponseEntity<String> response = authenticateWithApi(request);
 
+            if (response.getStatusCode().equals(HttpStatus.OK)) {
+                String jwt = jwtCore.generateToken(request.getEmail());
+                return ResponseEntity.ok().body(jwt);
+            }
 
-        } catch (BadCredentialsException bce) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Incorrect credentials");
+            return ResponseEntity.status(response.getStatusCode()).body(response.getBody());
+        } catch (HttpClientErrorException.BadRequest ex) {
+            // Handle 400 Bad Request error and extract the error message
+            String errorMessage = ex.getResponseBodyAsString();
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorMessage);
         }
-        SecurityContextHolder.getContext().setAuthentication(auth);
-        String jwt = jwtCore.generateToken(auth);
-        return ResponseEntity.ok().body(jwt);
     }
+
 
     @PostMapping("/register")
     private ResponseEntity<?> register(@RequestBody SignUpRequest request) {
         if (existByEmail(request.getEmail())) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("This email is already used is already used");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("This email is already used");
         }
 
-        String hashedPassword = passwordEncoder.encode(request.getPassword());
         switch (request.getRole()) {
             case "CUSTOMER" -> {
                 Customer customer = new Customer();
                 customer.setName(request.getName());
-                customer.setPassword(hashedPassword);
+                customer.setPassword(request.getPassword());
                 customer.setPhone(request.getPhone());
                 customer.setEmail(request.getEmail());
                 if (saveCustomer(customer).equals(HttpStatus.BAD_REQUEST)) {
@@ -79,11 +66,15 @@ public class AuthenticationController {
                     return ResponseEntity.ok("Customer was successfully registered");
                 }
             }
+            case "COURIER" -> {
+                return ResponseEntity.ok().build(); //TODO: COURIER ROLE AND OTHERS
+            }
             default -> {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Unknown role");
             }
         }
     }
+
 
     private boolean existByEmail(String email) {
         RestTemplate restTemplate = new RestTemplate();
@@ -104,19 +95,36 @@ public class AuthenticationController {
         if (existByEmail(customer.getEmail())) {
             return HttpStatus.BAD_REQUEST;
         }
-
-        String jwt = jwtCore.generateTokenForApi();
-
         RestTemplate restTemplate = new RestTemplate();
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("Authorization", "Bearer " + jwt);
+
+        HttpHeaders headers = signedHeader();
 
         HttpEntity<Customer> request = new HttpEntity<>(customer, headers);
 
-        HttpStatusCode status = restTemplate.postForEntity(
+        return restTemplate.postForEntity(
                 customer_url + dbAPI + "register-customer",
                 request,
                 Void.class).getStatusCode();
-        return status;
     }
+
+    private ResponseEntity<String> authenticateWithApi(SignInRequest signInRequest) {
+
+        RestTemplate restTemplate = new RestTemplate();
+        HttpHeaders headers = signedHeader();
+        HttpEntity<SignInRequest> request = new HttpEntity<>(signInRequest, headers);
+
+        return restTemplate.postForEntity(
+                customer_url + dbAPI + "login-customer",
+                request,
+                String.class);
+    }
+
+    private HttpHeaders signedHeader() {
+        String jwt = jwtCore.generateTokenForApi();
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "Bearer " + jwt);
+        return headers;
+    }
+
 }
