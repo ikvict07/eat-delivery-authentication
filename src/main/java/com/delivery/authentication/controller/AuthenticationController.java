@@ -3,6 +3,7 @@ package com.delivery.authentication.controller;
 import com.delivery.authentication.DTO.SignInRequest;
 import com.delivery.authentication.DTO.SignUpRequest;
 import com.delivery.authentication.Entity.Customer;
+import com.delivery.authentication.Entity.ROLES;
 import com.delivery.authentication.jwt.JwtCore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -47,31 +48,24 @@ public class AuthenticationController {
     }
 
 
-    @PostMapping("/register")
-    private ResponseEntity<?> register(@RequestBody SignUpRequest request) {
+    @PostMapping("/register-customer")
+    private ResponseEntity<?> registerCustomer(@RequestBody SignUpRequest request) {
         if (existByEmail(request.getEmail())) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("This email is already used");
         }
+        if (!request.getRole().equals(ROLES.CUSTOMER_ROLE.role)) {
+            return ResponseEntity.badRequest().body("Invalid role");
+        }
 
-        switch (request.getRole()) {
-            case "CUSTOMER" -> {
-                Customer customer = new Customer();
-                customer.setName(request.getName());
-                customer.setPassword(request.getPassword());
-                customer.setPhone(request.getPhone());
-                customer.setEmail(request.getEmail());
-                if (saveCustomer(customer).equals(HttpStatus.BAD_REQUEST)) {
-                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-                } else {
-                    return ResponseEntity.ok("Customer was successfully registered");
-                }
-            }
-            case "COURIER" -> {
-                return ResponseEntity.ok().build(); //TODO: COURIER ROLE AND OTHERS
-            }
-            default -> {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Unknown role");
-            }
+        Customer customer = new Customer();
+        customer.setName(request.getName());
+        customer.setPassword(request.getPassword());
+        customer.setPhone(request.getPhone());
+        customer.setEmail(request.getEmail());
+        if (saveCustomer(customer).equals(HttpStatus.BAD_REQUEST)) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+        } else {
+            return ResponseEntity.ok("Customer was successfully registered");
         }
     }
 
@@ -113,8 +107,18 @@ public class AuthenticationController {
         HttpHeaders headers = signedHeader();
         HttpEntity<SignInRequest> request = new HttpEntity<>(signInRequest, headers);
 
+        String url;
+        switch (signInRequest.getRole()) {
+            case "CUSTOMER" -> {
+                url = customer_url + dbAPI + "login-customer";
+            }
+            default -> {
+                return ResponseEntity.badRequest().body("Something is wrong with your login data");
+            }
+        }
+
         return restTemplate.postForEntity(
-                customer_url + dbAPI + "login-customer",
+                url,
                 request,
                 String.class);
     }

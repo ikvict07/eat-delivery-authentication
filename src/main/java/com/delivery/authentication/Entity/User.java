@@ -11,6 +11,6 @@ public class User {
     private String email;
     private String phone;
 
-    private final String role;
+    protected String role = "user";
 
 }

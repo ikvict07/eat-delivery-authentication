@@ -10,6 +10,6 @@ public class SignUpRequest {
     private String email;
     private String phone;
 
-    private final String role = "CUSTOMER";
+    private String role;
 }
 
