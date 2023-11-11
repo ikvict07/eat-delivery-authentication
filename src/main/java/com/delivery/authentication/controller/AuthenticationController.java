@@ -29,6 +29,13 @@ public class AuthenticationController {
         this.jwtCore = jwtCore;
     }
 
+    /**
+     * Authenticates user with the provided sign-in request.
+     * Sending requests to microservices that handle logging in.
+     * Returns JWT if OK, otherwise BAD_REQUEST.
+     * @param request The sign-in request containing user credentials.
+     * @return The response entity containing the authentication result.
+     */
     @PostMapping("/login")
     private ResponseEntity<?> login(@RequestBody SignInRequest request) {
         try {
@@ -48,6 +55,16 @@ public class AuthenticationController {
     }
 
 
+    /**
+     * Registers a new customer with the provided sign-up request.
+     * Checks if the email is already used and if the role is valid.
+     * Creates a new Customer object and sets the required fields.
+     * If the customer is successfully saved, returns OK with a success message,
+     * otherwise returns BAD_REQUEST.
+     *
+     * @param request The sign-up request containing the customer details.
+     * @return The response entity containing the registration result.
+     */
     @PostMapping("/register-customer")
     private ResponseEntity<?> registerCustomer(@RequestBody SignUpRequest request) {
         if (existByEmail(request.getEmail())) {

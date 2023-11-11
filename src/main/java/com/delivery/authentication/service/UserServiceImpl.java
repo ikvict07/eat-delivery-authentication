@@ -40,7 +40,6 @@ public class UserServiceImpl implements UserDetailsService {
                         .contentType(MediaType.APPLICATION_JSON)
                         .bodyValue(map)
                         .retrieve()
-                        // ... обработка ошибок, если это необходимо
                         .bodyToMono(Customer.class)
                         .map(UserDetailsImpl::build) // convert Customer to UserDetailsImpl
                         .block();
